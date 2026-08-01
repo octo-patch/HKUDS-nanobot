@@ -262,6 +262,7 @@ export function MessageBubble({
           text={userContent.slice(slashCommand.command.length)}
           cliApps={mentionCliApps}
           mcpPresets={mentionMcpPresets}
+          sessionMentions={message.sessionMentions}
         />
       </>
     ) : (
@@ -269,6 +270,7 @@ export function MessageBubble({
         text={userContent}
         cliApps={mentionCliApps}
         mcpPresets={mentionMcpPresets}
+        sessionMentions={message.sessionMentions}
       />
     );
     return (

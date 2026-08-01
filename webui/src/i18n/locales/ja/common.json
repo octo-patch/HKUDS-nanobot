@@ -1192,14 +1192,16 @@
         "io": "このファイルを読み込めません"
       },
       "mentions": {
-        "ariaLabel": "アプリ",
-        "label": "アプリ",
+        "ariaLabel": "メンション",
+        "label": "メンション",
         "cliGroup": "CLI アプリ",
         "mcpGroup": "MCP サービス",
         "cliBadge": "CLI",
         "mcpBadge": "MCP",
         "cliDescription": "@{{name}} をローカル CLI アプリとして使用",
-        "mcpDescription": "@{{name}} を MCP サーバーとして使用"
+        "mcpDescription": "@{{name}} を MCP サーバーとして使用",
+        "sessionBadge": "チャット",
+        "sessionDescription": "@{{name}} を過去のチャットとして参照"
       },
       "workspace": {
         "accessAria": "ワークスペースのアクセスモード",

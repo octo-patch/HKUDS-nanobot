@@ -15,6 +15,7 @@ import type {
   InboundEvent,
   OutboundCliAppMention,
   OutboundMcpPresetMention,
+  OutboundSessionMention,
   OutboundMedia,
   GoalStateWsPayload,
   MessageDeliveryStatus,
@@ -481,6 +482,7 @@ export interface SendAttachment {
 export interface SendOptions {
   cliApps?: OutboundCliAppMention[];
   mcpPresets?: OutboundMcpPresetMention[];
+  sessionMentions?: OutboundSessionMention[];
   quotedContext?: string;
   workspaceScope?: WorkspaceScopePayload | null;
   sideChannel?: boolean;
@@ -1418,6 +1420,9 @@ export function useNanobotStream(
             ...(previews ? { media: previews } : {}),
             ...(options?.cliApps?.length ? { cliApps: options.cliApps } : {}),
             ...(options?.mcpPresets?.length ? { mcpPresets: options.mcpPresets } : {}),
+            ...(options?.sessionMentions?.length
+              ? { sessionMentions: options.sessionMentions }
+              : {}),
           },
         ];
       });

@@ -64,6 +64,8 @@ export interface UIMessage {
   cliApps?: UICliAppAttachment[];
   /** Settings-managed MCP presets explicitly attached to this user turn. */
   mcpPresets?: UIMcpPresetAttachment[];
+  /** Persisted sessions explicitly referenced by this user turn. */
+  sessionMentions?: SessionMention[];
   /** Assistant turn: accumulated model reasoning / thinking text. Built up
    * incrementally from ``reasoning_delta`` frames; finalized when
    * ``reasoning_end`` arrives. */
@@ -105,6 +107,14 @@ export interface UIMcpPresetAttachment {
   configured?: boolean;
   logo_url?: string | null;
   brand_color?: string | null;
+}
+
+export interface SessionMention {
+  /** Text token inserted in the composer, without the leading @. */
+  name: string;
+  /** Stable persisted-session identifier used by read_session. */
+  session_key: string;
+  title: string;
 }
 
 export interface SessionAutomationJob {
@@ -1295,6 +1305,8 @@ export interface OutboundMcpPresetMention {
   brand_color?: string | null;
 }
 
+export type OutboundSessionMention = SessionMention;
+
 /** Response shape for ``GET .../webui-thread`` (server-built transcript replay). */
 export interface WebuiThreadPagePayload {
   before_cursor?: string | null;
@@ -1342,6 +1354,7 @@ export type Outbound =
       media?: OutboundMedia[];
       cli_apps?: OutboundCliAppMention[];
       mcp_presets?: OutboundMcpPresetMention[];
+      session_mentions?: OutboundSessionMention[];
       quoted_context?: string;
       workspace_scope?: WorkspaceScopePayload;
       turn_id?: string;

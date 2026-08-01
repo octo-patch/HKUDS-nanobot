@@ -1192,14 +1192,16 @@
         "io": "Impossible de lire ce fichier"
       },
       "mentions": {
-        "ariaLabel": "Apps",
-        "label": "Apps",
+        "ariaLabel": "Mentions",
+        "label": "Mentions",
         "cliGroup": "Apps CLI",
         "mcpGroup": "Services MCP",
         "cliBadge": "CLI",
         "mcpBadge": "MCP",
         "cliDescription": "Utiliser @{{name}} comme app CLI locale",
-        "mcpDescription": "Utiliser @{{name}} comme serveur MCP"
+        "mcpDescription": "Utiliser @{{name}} comme serveur MCP",
+        "sessionBadge": "Chat",
+        "sessionDescription": "Référencer @{{name}} comme discussion précédente"
       },
       "workspace": {
         "accessAria": "Mode d’accès à l’espace de travail",

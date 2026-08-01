@@ -1190,14 +1190,16 @@
         }
       },
       "mentions": {
-        "ariaLabel": "Apps",
-        "label": "Apps",
+        "ariaLabel": "Menções",
+        "label": "Menções",
         "cliGroup": "Apps CLI",
         "mcpGroup": "Serviços MCP",
         "cliBadge": "CLI",
         "mcpBadge": "MCP",
         "cliDescription": "Usar @{{name}} como app CLI local",
-        "mcpDescription": "Usar @{{name}} como servidor MCP"
+        "mcpDescription": "Usar @{{name}} como servidor MCP",
+        "sessionBadge": "Chat",
+        "sessionDescription": "Referenciar @{{name}} como chat anterior"
       },
       "encoding": "Codificando…",
       "remove": "Remover anexo",

@@ -1192,14 +1192,16 @@
         "io": "Không thể đọc tệp này"
       },
       "mentions": {
-        "ariaLabel": "Ứng dụng",
-        "label": "Ứng dụng",
+        "ariaLabel": "Đề cập",
+        "label": "Đề cập",
         "cliGroup": "Ứng dụng CLI",
         "mcpGroup": "Dịch vụ MCP",
         "cliBadge": "CLI",
         "mcpBadge": "MCP",
         "cliDescription": "Dùng @{{name}} như ứng dụng CLI cục bộ",
-        "mcpDescription": "Dùng @{{name}} như máy chủ MCP"
+        "mcpDescription": "Dùng @{{name}} như máy chủ MCP",
+        "sessionBadge": "Trò chuyện",
+        "sessionDescription": "Tham chiếu @{{name}} như cuộc trò chuyện trước"
       },
       "workspace": {
         "accessAria": "Chế độ truy cập workspace",

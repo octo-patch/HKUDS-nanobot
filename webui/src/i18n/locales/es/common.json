@@ -1193,14 +1193,16 @@
         "io": "No se pudo leer este archivo"
       },
       "mentions": {
-        "ariaLabel": "Apps",
-        "label": "Apps",
+        "ariaLabel": "Menciones",
+        "label": "Menciones",
         "cliGroup": "Apps CLI",
         "mcpGroup": "Servicios MCP",
         "cliBadge": "CLI",
         "mcpBadge": "MCP",
         "cliDescription": "Usar @{{name}} como app CLI local",
-        "mcpDescription": "Usar @{{name}} como servidor MCP"
+        "mcpDescription": "Usar @{{name}} como servidor MCP",
+        "sessionBadge": "Chat",
+        "sessionDescription": "Referenciar @{{name}} como chat anterior"
       },
       "workspace": {
         "accessAria": "Modo de acceso al espacio de trabajo",

@@ -1333,7 +1333,7 @@ describe("ThreadComposer", () => {
     const input = screen.getByLabelText("Message input");
     fireEvent.change(input, { target: { value: "@", selectionStart: 1 } });
 
-    const palette = screen.getByRole("listbox", { name: "Apps" });
+    const palette = screen.getByRole("listbox", { name: "Mentions" });
     expect(palette).toBeInTheDocument();
     expect(screen.getByRole("option", { name: /@gimp/i })).toHaveAttribute(
       "aria-selected",
@@ -1352,7 +1352,7 @@ describe("ThreadComposer", () => {
     expect(screen.getByTestId("composer-cli-mention-blender")).toHaveTextContent("@blender");
     expect(screen.queryByTestId("composer-cli-app-tray")).not.toBeInTheDocument();
     expect(onSend).not.toHaveBeenCalled();
-    expect(screen.queryByRole("listbox", { name: "Apps" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("listbox", { name: "Mentions" })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Send message" }));
 
@@ -1470,6 +1470,48 @@ describe("ThreadComposer", () => {
         configured: true,
         logo_url: "https://example.invalid/browserbase.svg",
         brand_color: "#111827",
+      }],
+    });
+  });
+
+  it("reuses the mention palette for persisted sessions", () => {
+    const onSend = vi.fn();
+    render(
+      <ThreadComposer
+        onSend={onSend}
+        placeholder="Type your message..."
+        sessions={[{
+          key: "websocket:pricing",
+          channel: "websocket",
+          chatId: "pricing",
+          createdAt: null,
+          updatedAt: null,
+          title: "收费设计",
+          preview: "讨论云存储",
+        }]}
+      />,
+    );
+
+    const input = screen.getByLabelText("Message input");
+    fireEvent.change(input, {
+      target: { value: "参考 @收费", selectionStart: 6 },
+    });
+
+    expect(screen.getByRole("option", { name: /@chat-收费设计/i })).toBeInTheDocument();
+    fireEvent.keyDown(input, { key: "Tab" });
+
+    expect(input).toHaveValue("参考 @chat-收费设计 ");
+    expect(screen.getByTestId("composer-session-mention-chat-收费设计")).toHaveTextContent(
+      "@chat-收费设计",
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Send message" }));
+
+    expect(onSend).toHaveBeenCalledWith("参考 @chat-收费设计", undefined, {
+      sessionMentions: [{
+        name: "chat-收费设计",
+        session_key: "websocket:pricing",
+        title: "收费设计",
       }],
     });
   });

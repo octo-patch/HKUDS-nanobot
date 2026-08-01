@@ -1192,14 +1192,16 @@
         "io": "Tidak dapat membaca file ini"
       },
       "mentions": {
-        "ariaLabel": "Aplikasi",
-        "label": "Aplikasi",
+        "ariaLabel": "Sebutan",
+        "label": "Sebutan",
         "cliGroup": "App CLI",
         "mcpGroup": "Layanan MCP",
         "cliBadge": "CLI",
         "mcpBadge": "MCP",
         "cliDescription": "Gunakan @{{name}} sebagai aplikasi CLI lokal",
-        "mcpDescription": "Gunakan @{{name}} sebagai server MCP"
+        "mcpDescription": "Gunakan @{{name}} sebagai server MCP",
+        "sessionBadge": "Chat",
+        "sessionDescription": "Referensikan @{{name}} sebagai chat sebelumnya"
       },
       "workspace": {
         "accessAria": "Mode akses workspace",

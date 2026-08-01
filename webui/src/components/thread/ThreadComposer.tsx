@@ -13,6 +13,7 @@ import { MarkdownText, preloadMarkdownText } from "@/components/MarkdownText";
 import {
   CliAppMentionToken,
   McpPresetMentionToken,
+  SessionMentionToken,
   cliAppInitials,
   mcpPresetInitials,
   splitCapabilityMentionSegments,
@@ -80,10 +81,12 @@ import { usePageVisibility } from "@/hooks/usePageVisibility";
 import { useVoiceRecorder, type VoiceRecorderErrorKey } from "@/hooks/useVoiceRecorder";
 import type {
   CliAppInfo,
+  ChatSummary,
   GoalStateWsPayload,
   McpPresetInfo,
   OutboundCliAppMention,
   OutboundMcpPresetMention,
+  SessionMention,
   SlashCommand,
   SkillSummary,
   WebUIIngressLimits,
@@ -183,6 +186,7 @@ interface ThreadComposerProps {
   slashCommands?: SlashCommand[];
   cliApps?: CliAppInfo[];
   mcpPresets?: McpPresetInfo[];
+  sessions?: ChatSummary[];
   skills?: SkillSummary[];
   onStop?: () => void;
   onTranscribeAudio?: (dataUrl: string, options?: { durationMs?: number }) => Promise<string>;
@@ -295,7 +299,42 @@ interface CliAppMentionQuery {
 
 type MentionCandidate =
   | { kind: "cli"; name: string; app: CliAppInfo }
-  | { kind: "mcp"; name: string; preset: McpPresetInfo };
+  | { kind: "mcp"; name: string; preset: McpPresetInfo }
+  | { kind: "session"; name: string; session: ChatSummary; mention: SessionMention };
+
+function sessionMentionBase(session: ChatSummary): string {
+  const label = session.title?.trim() || session.preview.trim() || "session";
+  const slug = label
+    .normalize("NFKC")
+    .replace(/\s+/g, "-")
+    .replace(/[^\p{L}\p{N}_-]+/gu, "")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+  return `chat-${Array.from(slug || "session").slice(0, 40).join("")}`;
+}
+
+function sessionMentionOptions(
+  sessions: ChatSummary[],
+): Array<{ session: ChatSummary; mention: SessionMention }> {
+  const keysByBase = new Map<string, string[]>();
+  for (const session of sessions) {
+    const base = sessionMentionBase(session);
+    keysByBase.set(base, [...(keysByBase.get(base) ?? []), session.key].sort());
+  }
+  return sessions.map((session) => {
+    const base = sessionMentionBase(session);
+    const matchingKeys = keysByBase.get(base) ?? [];
+    const suffix = matchingKeys.length > 1 ? `-${matchingKeys.indexOf(session.key) + 1}` : "";
+    return {
+      session,
+      mention: {
+        name: `${base}${suffix}`,
+        session_key: session.key,
+        title: session.title?.trim() || session.preview.trim(),
+      },
+    };
+  });
+}
 
 interface SlashPaletteCommand {
   command: string;
@@ -833,6 +872,7 @@ export function ThreadComposer({
   slashCommands = [],
   cliApps = [],
   mcpPresets = [],
+  sessions = [],
   skills = [],
   onStop,
   onTranscribeAudio,
@@ -1153,7 +1193,7 @@ export function ThreadComposer({
     if (disabled || cliAppMenuDismissed) return null;
     const caret = Math.min(Math.max(cursorPosition, 0), value.length);
     const beforeCaret = value.slice(0, caret);
-    const match = /(?:^|\s)@([a-z0-9_-]*)$/i.exec(beforeCaret);
+    const match = /(?:^|\s)@([\p{L}\p{N}_-]*)$/iu.exec(beforeCaret);
     if (!match) return null;
     const query = match[1].toLowerCase();
     return {
@@ -1163,8 +1203,24 @@ export function ThreadComposer({
     };
   }, [cliAppMenuDismissed, cursorPosition, disabled, value]);
 
+  const availableSessionMentions = useMemo(
+    () => sessionMentionOptions(sessions),
+    [sessions],
+  );
   const filteredMentionCandidates = useMemo<MentionCandidate[]>(() => {
     if (!cliAppMention) return [];
+    const sessionCandidates: MentionCandidate[] = availableSessionMentions
+      .filter(({ session, mention }) => [
+        mention.name,
+        session.title ?? "",
+        session.preview,
+      ].join(" ").toLowerCase().includes(cliAppMention.query))
+      .map(({ session, mention }) => ({
+        kind: "session",
+        name: mention.name,
+        session,
+        mention,
+      }));
     const cliCandidates: MentionCandidate[] = cliApps
       .filter((app) => app.installed)
       .filter((app) => {
@@ -1191,17 +1247,22 @@ export function ThreadComposer({
         return haystack.includes(cliAppMention.query);
       })
       .map((preset) => ({ kind: "mcp", name: preset.name, preset }));
-    return [...cliCandidates, ...mcpCandidates].slice(0, 8);
-  }, [cliAppMention, cliApps, mcpPresets]);
+    return [...sessionCandidates, ...cliCandidates, ...mcpCandidates].slice(0, 8);
+  }, [availableSessionMentions, cliAppMention, cliApps, mcpPresets]);
 
   const showCliAppMenu = filteredMentionCandidates.length > 0;
   const showAnyPalette = showSlashMenu || showCliAppMenu;
   const mentionSegments = useMemo(
-    () => splitCapabilityMentionSegments(value, cliApps, mcpPresets),
-    [cliApps, mcpPresets, value],
+    () => splitCapabilityMentionSegments(
+      value,
+      cliApps,
+      mcpPresets,
+      availableSessionMentions.map(({ mention }) => mention),
+    ),
+    [availableSessionMentions, cliApps, mcpPresets, value],
   );
   const hasMentionDecorations = mentionSegments.some(
-    (segment) => segment.kind === "cli" || segment.kind === "mcp",
+    (segment) => segment.kind !== "text",
   );
   const activeCliMentionApps = useMemo(() => {
     const seen = new Set<string>();
@@ -1217,6 +1278,14 @@ export function ThreadComposer({
       if (segment.kind !== "mcp" || seen.has(segment.preset.name)) return [];
       seen.add(segment.preset.name);
       return [segment.preset];
+    });
+  }, [mentionSegments]);
+  const activeSessionMentions = useMemo(() => {
+    const seen = new Set<string>();
+    return mentionSegments.flatMap((segment) => {
+      if (segment.kind !== "session" || seen.has(segment.mention.session_key)) return [];
+      seen.add(segment.mention.session_key);
+      return [segment.mention];
     });
   }, [mentionSegments]);
   const [slashPaletteLayout, setSlashPaletteLayout] = useState<SlashPaletteLayout>({
@@ -1652,17 +1721,24 @@ export function ThreadComposer({
     const attachedCliApps = activeCliMentionApps.map(cliAppMentionPayload);
     const attachedMcpPresets = activeMcpPresetMentions.map(mcpPresetMentionPayload);
     const options: SendOptions | undefined =
-      attachedCliApps.length > 0 || attachedMcpPresets.length > 0 || normalizedQuotedContext
+      attachedCliApps.length > 0
+      || attachedMcpPresets.length > 0
+      || activeSessionMentions.length > 0
+      || normalizedQuotedContext
         ? {
             ...(attachedCliApps.length > 0 ? { cliApps: attachedCliApps } : {}),
             ...(attachedMcpPresets.length > 0 ? { mcpPresets: attachedMcpPresets } : {}),
+            ...(activeSessionMentions.length > 0
+              ? { sessionMentions: activeSessionMentions }
+              : {}),
             ...(normalizedQuotedContext ? { quotedContext: normalizedQuotedContext } : {}),
           }
         : undefined;
     const hasPlainTextCommandPayload =
       payload === undefined
       && attachedCliApps.length === 0
-      && attachedMcpPresets.length === 0;
+      && attachedMcpPresets.length === 0
+      && activeSessionMentions.length === 0;
     const slashLifecycle = hasPlainTextCommandPayload
       ? slashCommandLifecycle(content, slashCommands)
       : null;
@@ -1701,6 +1777,7 @@ export function ThreadComposer({
   }, [
     activeCliMentionApps,
     activeMcpPresetMentions,
+    activeSessionMentions,
     canSend,
     clear,
     clearComposerText,
@@ -2429,13 +2506,21 @@ function ComposerCliMentionOverlay({
             isHero={isHero}
           />
         );
-        return (
+        if (segment.kind === "mcp") return (
           <McpPresetMentionToken
             key={`mcp-${segment.preset.name}-${index}`}
             preset={segment.preset}
             label={segment.text}
             variant="composer"
             isHero={isHero}
+          />
+        );
+        return (
+          <SessionMentionToken
+            key={`session-${segment.mention.session_key}-${index}`}
+            mention={segment.mention}
+            label={segment.text}
+            variant="composer"
           />
         );
       })}
@@ -2513,13 +2598,19 @@ function CliAppMentionPalette({
           const name = candidate.name;
           const displayName = candidate.kind === "cli"
             ? candidate.app.display_name
-            : candidate.preset.display_name;
+            : candidate.kind === "mcp"
+              ? candidate.preset.display_name
+              : candidate.mention.title || candidate.name;
           const typeLabel = candidate.kind === "cli"
             ? t("thread.composer.mentions.cliBadge")
-            : t("thread.composer.mentions.mcpBadge");
+            : candidate.kind === "mcp"
+              ? t("thread.composer.mentions.mcpBadge")
+              : t("thread.composer.mentions.sessionBadge");
           const ariaDescription = candidate.kind === "cli"
             ? t("thread.composer.mentions.cliDescription", { name })
-            : t("thread.composer.mentions.mcpDescription", { name });
+            : candidate.kind === "mcp"
+              ? t("thread.composer.mentions.mcpDescription", { name })
+              : t("thread.composer.mentions.sessionDescription", { name });
           return (
             <button
               key={`${candidate.kind}-${name}`}
@@ -2554,7 +2645,9 @@ function CliAppMentionPalette({
                   "ml-2 shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold tracking-normal",
                   candidate.kind === "cli"
                     ? "bg-orange-500/10 text-orange-600 dark:text-orange-300"
-                    : "bg-sky-500/10 text-sky-600 dark:text-sky-300",
+                    : candidate.kind === "mcp"
+                      ? "bg-sky-500/10 text-sky-600 dark:text-sky-300"
+                      : "bg-violet-500/10 text-violet-600 dark:text-violet-300",
                 )}
               >
                 {typeLabel}
@@ -2576,11 +2669,24 @@ function MentionCandidateLogo({
 }) {
   const color = (candidate.kind === "cli"
     ? candidate.app.brand_color
-    : candidate.preset.brand_color) || INLINE_TOKEN_HIGHLIGHT_COLOR;
-  const rawLogoUrl = candidate.kind === "cli" ? candidate.app.logo_url : candidate.preset.logo_url;
+    : candidate.kind === "mcp"
+      ? candidate.preset.brand_color
+      : null) || INLINE_TOKEN_HIGHLIGHT_COLOR;
+  const rawLogoUrl = candidate.kind === "cli"
+    ? candidate.app.logo_url
+    : candidate.kind === "mcp"
+      ? candidate.preset.logo_url
+      : null;
   const logoUrls = useMemo(() => logoFallbackUrls(rawLogoUrl), [rawLogoUrl]);
   const { logoUrl, onLogoError, onLogoLoad } = useLogoFallback(logoUrls);
 
+  if (candidate.kind === "session") {
+    return (
+      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-[5px] bg-violet-500/10 text-violet-600 dark:text-violet-300">
+        <History className="h-3.5 w-3.5" aria-hidden />
+      </span>
+    );
+  }
   if (logoUrl) {
     return (
       <span
