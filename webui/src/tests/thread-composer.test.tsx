@@ -1497,23 +1497,66 @@ describe("ThreadComposer", () => {
       target: { value: "参考 @收费", selectionStart: 6 },
     });
 
-    expect(screen.getByRole("option", { name: /@chat-收费设计/i })).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "Nanobot conversations" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: /@收费设计/i })).toBeInTheDocument();
     fireEvent.keyDown(input, { key: "Tab" });
 
-    expect(input).toHaveValue("参考 @chat-收费设计 ");
-    expect(screen.getByTestId("composer-session-mention-chat-收费设计")).toHaveTextContent(
-      "@chat-收费设计",
+    expect(input).toHaveValue("参考 @收费设计 ");
+    expect(screen.getByTestId("composer-session-mention-收费设计")).toHaveTextContent(
+      "@收费设计",
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Send message" }));
 
-    expect(onSend).toHaveBeenCalledWith("参考 @chat-收费设计", undefined, {
+    expect(onSend).toHaveBeenCalledWith("参考 @收费设计", undefined, {
       sessionMentions: [{
-        name: "chat-收费设计",
+        name: "收费设计",
         session_key: "websocket:pricing",
         title: "收费设计",
       }],
     });
+  });
+
+  it("disambiguates a session mention that shares a capability name", () => {
+    render(
+      <ThreadComposer
+        onSend={vi.fn()}
+        placeholder="Type your message..."
+        cliApps={CLI_APPS}
+        sessions={[
+          {
+            key: "websocket:blender-chat",
+            channel: "websocket",
+            chatId: "blender-chat",
+            createdAt: null,
+            updatedAt: null,
+            title: "Blender",
+            preview: "3D notes",
+          },
+          ...Array.from({ length: 8 }, (_, index) => ({
+            key: `websocket:chat-${index}`,
+            channel: "websocket",
+            chatId: `chat-${index}`,
+            createdAt: null,
+            updatedAt: null,
+            title: `Chat ${index}`,
+            preview: "",
+          })),
+        ]}
+      />,
+    );
+
+    const input = screen.getByLabelText("Message input");
+    fireEvent.change(input, { target: { value: "@", selectionStart: 1 } });
+
+    expect(screen.getByRole("group", { name: "Nanobot conversations" })).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "CLI apps" })).toBeInTheDocument();
+    expect(screen.getByRole("option", {
+      name: /Blender @Blender-chat Reference/i,
+    })).toBeInTheDocument();
+    expect(screen.getByRole("option", {
+      name: /Blender @blender Use/i,
+    })).toBeInTheDocument();
   });
 
   it("opens skills only from a $ reference and prioritizes the skill name", () => {

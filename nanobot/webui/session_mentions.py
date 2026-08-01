@@ -10,7 +10,7 @@ from typing import Any, cast
 from nanobot.runtime_context import RuntimeContextBlock, wrap_runtime_context_lines
 from nanobot.session.manager import SessionManager
 
-_MENTION_NAME_RE = re.compile(r"^chat-[\w-]+$")
+_MENTION_NAME_RE = re.compile(r"^[\w-]+$")
 _MAX_MENTIONS = 8
 
 

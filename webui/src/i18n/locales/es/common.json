@@ -1197,11 +1197,12 @@
         "label": "Menciones",
         "cliGroup": "Apps CLI",
         "mcpGroup": "Servicios MCP",
+        "sessionGroup": "Conversaciones de Nanobot",
         "cliBadge": "CLI",
         "mcpBadge": "MCP",
         "cliDescription": "Usar @{{name}} como app CLI local",
         "mcpDescription": "Usar @{{name}} como servidor MCP",
-        "sessionBadge": "Chat",
+        "sessionBadge": "Conversación de Nanobot",
         "sessionDescription": "Referenciar @{{name}} como chat anterior"
       },
       "workspace": {

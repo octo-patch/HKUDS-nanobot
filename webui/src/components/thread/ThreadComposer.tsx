@@ -34,6 +34,7 @@ import {
   History,
   ImageIcon,
   Loader2,
+  MessageCircle,
   Mic,
   Plus,
   Quote,
@@ -310,25 +311,33 @@ function sessionMentionBase(session: ChatSummary): string {
     .replace(/[^\p{L}\p{N}_-]+/gu, "")
     .replace(/-+/g, "-")
     .replace(/^-|-$/g, "");
-  return `chat-${Array.from(slug || "session").slice(0, 40).join("")}`;
+  return Array.from(slug || "session").slice(0, 40).join("");
 }
 
 function sessionMentionOptions(
   sessions: ChatSummary[],
+  reservedNames: string[],
 ): Array<{ session: ChatSummary; mention: SessionMention }> {
-  const keysByBase = new Map<string, string[]>();
-  for (const session of sessions) {
+  const used = new Set(reservedNames.map((name) => name.toLowerCase()));
+  const namesByKey = new Map<string, string>();
+  for (const session of [...sessions].sort((a, b) => a.key.localeCompare(b.key))) {
     const base = sessionMentionBase(session);
-    keysByBase.set(base, [...(keysByBase.get(base) ?? []), session.key].sort());
+    let name = base;
+    let suffix = 2;
+    if (used.has(name.toLowerCase())) name = `${base}-chat`;
+    while (used.has(name.toLowerCase())) {
+      name = `${base}-chat-${suffix}`;
+      suffix += 1;
+    }
+    used.add(name.toLowerCase());
+    namesByKey.set(session.key, name);
   }
   return sessions.map((session) => {
-    const base = sessionMentionBase(session);
-    const matchingKeys = keysByBase.get(base) ?? [];
-    const suffix = matchingKeys.length > 1 ? `-${matchingKeys.indexOf(session.key) + 1}` : "";
+    const name = namesByKey.get(session.key) ?? sessionMentionBase(session);
     return {
       session,
       mention: {
-        name: `${base}${suffix}`,
+        name,
         session_key: session.key,
         title: session.title?.trim() || session.preview.trim(),
       },
@@ -1204,8 +1213,16 @@ export function ThreadComposer({
   }, [cliAppMenuDismissed, cursorPosition, disabled, value]);
 
   const availableSessionMentions = useMemo(
-    () => sessionMentionOptions(sessions),
-    [sessions],
+    () => sessionMentionOptions(
+      sessions,
+      [
+        ...cliApps.filter((app) => app.installed).map((app) => app.name),
+        ...mcpPresets
+          .filter((preset) => preset.installed && preset.configured)
+          .map((preset) => preset.name),
+      ],
+    ),
+    [cliApps, mcpPresets, sessions],
   );
   const filteredMentionCandidates = useMemo<MentionCandidate[]>(() => {
     if (!cliAppMention) return [];
@@ -1247,7 +1264,15 @@ export function ThreadComposer({
         return haystack.includes(cliAppMention.query);
       })
       .map((preset) => ({ kind: "mcp", name: preset.name, preset }));
-    return [...sessionCandidates, ...cliCandidates, ...mcpCandidates].slice(0, 8);
+    const groups = [sessionCandidates, cliCandidates, mcpCandidates];
+    const limits = groups.map((group, index) => Math.min(group.length, [4, 2, 2][index]));
+    let remaining = 8 - limits.reduce((total, limit) => total + limit, 0);
+    for (let index = 0; index < groups.length && remaining > 0; index += 1) {
+      const extra = Math.min(groups[index].length - limits[index], remaining);
+      limits[index] += extra;
+      remaining -= extra;
+    }
+    return groups.flatMap((group, index) => group.slice(0, limits[index]));
   }, [availableSessionMentions, cliAppMention, cliApps, mcpPresets]);
 
   const showCliAppMenu = filteredMentionCandidates.length > 0;
@@ -2576,6 +2601,19 @@ function CliAppMentionPalette({
     layout.maxHeight - SLASH_PALETTE_CHROME_PX,
   );
   const listRef = useSelectedOptionScroll(selectedIndex);
+  const groupedCandidates = (["session", "cli", "mcp"] as const)
+    .map((kind) => ({
+      kind,
+      label: kind === "session"
+        ? t("thread.composer.mentions.sessionGroup")
+        : kind === "cli"
+          ? t("thread.composer.mentions.cliGroup")
+          : t("thread.composer.mentions.mcpGroup"),
+      items: candidates
+        .map((candidate, index) => ({ candidate, index }))
+        .filter(({ candidate }) => candidate.kind === kind),
+    }))
+    .filter((group) => group.items.length > 0);
   return (
     <div
       role="listbox"
@@ -2589,72 +2627,76 @@ function CliAppMentionPalette({
         isHero ? "max-w-[58rem]" : "max-w-[49.5rem]",
       )}
     >
-      <div className="px-2 pb-1.5 pt-0.5 text-[13px] font-semibold text-muted-foreground/78">
-        {t("thread.composer.mentions.label")}
-      </div>
       <div ref={listRef} className="overflow-y-auto" style={{ maxHeight: listMaxHeight }}>
-        {candidates.map((candidate, index) => {
-          const selected = index === selectedIndex;
-          const name = candidate.name;
-          const displayName = candidate.kind === "cli"
-            ? candidate.app.display_name
-            : candidate.kind === "mcp"
-              ? candidate.preset.display_name
-              : candidate.mention.title || candidate.name;
-          const typeLabel = candidate.kind === "cli"
-            ? t("thread.composer.mentions.cliBadge")
-            : candidate.kind === "mcp"
-              ? t("thread.composer.mentions.mcpBadge")
-              : t("thread.composer.mentions.sessionBadge");
-          const ariaDescription = candidate.kind === "cli"
-            ? t("thread.composer.mentions.cliDescription", { name })
-            : candidate.kind === "mcp"
-              ? t("thread.composer.mentions.mcpDescription", { name })
-              : t("thread.composer.mentions.sessionDescription", { name });
-          return (
-            <button
-              key={`${candidate.kind}-${name}`}
-              type="button"
-              role="option"
-              data-palette-index={index}
-              aria-selected={selected}
-              aria-label={`${displayName} @${name} ${ariaDescription} ${typeLabel}`}
-              onMouseEnter={() => onHover(index)}
-              onMouseDown={(e) => {
-                e.preventDefault();
-                onChoose(candidate);
-              }}
-              className={cn(
-                "flex min-h-10 w-full items-center gap-2.5 rounded-[13px] px-2.5 py-1.5 text-left transition-colors",
-                selected
-                  ? "bg-foreground/[0.055] text-foreground"
-                  : "text-foreground/90 hover:bg-foreground/[0.04]",
-              )}
-            >
-              <MentionCandidateLogo candidate={candidate} selected={selected} />
-              <span className="flex min-w-0 flex-1 items-baseline gap-2">
-                <span className="min-w-0 truncate text-[15px] font-medium tracking-normal text-foreground">
-                  {displayName}
-                </span>
-                <span className="truncate text-[15px] font-normal tracking-normal text-muted-foreground/72">
-                  @{name}
-                </span>
-              </span>
-              <span
-                className={cn(
-                  "ml-2 shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold tracking-normal",
-                  candidate.kind === "cli"
-                    ? "bg-orange-500/10 text-orange-600 dark:text-orange-300"
-                    : candidate.kind === "mcp"
-                      ? "bg-sky-500/10 text-sky-600 dark:text-sky-300"
-                      : "bg-violet-500/10 text-violet-600 dark:text-violet-300",
-                )}
-              >
-                {typeLabel}
-              </span>
-            </button>
-          );
-        })}
+        {groupedCandidates.map((group) => (
+          <div key={group.kind} role="group" aria-label={group.label} className="mt-1.5 first:mt-0">
+            <div className="px-2 pb-1 pt-1 text-[12px] font-medium text-muted-foreground/72">
+              {group.label}
+            </div>
+            {group.items.map(({ candidate, index }) => {
+              const selected = index === selectedIndex;
+              const name = candidate.name;
+              const displayName = candidate.kind === "cli"
+                ? candidate.app.display_name
+                : candidate.kind === "mcp"
+                  ? candidate.preset.display_name
+                  : candidate.mention.title || candidate.name;
+              const typeLabel = candidate.kind === "cli"
+                ? t("thread.composer.mentions.cliBadge")
+                : candidate.kind === "mcp"
+                  ? t("thread.composer.mentions.mcpBadge")
+                  : t("thread.composer.mentions.sessionBadge");
+              const ariaDescription = candidate.kind === "cli"
+                ? t("thread.composer.mentions.cliDescription", { name })
+                : candidate.kind === "mcp"
+                  ? t("thread.composer.mentions.mcpDescription", { name })
+                  : t("thread.composer.mentions.sessionDescription", { name });
+              return (
+                <button
+                  key={`${candidate.kind}-${name}`}
+                  type="button"
+                  role="option"
+                  data-palette-index={index}
+                  aria-selected={selected}
+                  aria-label={`${displayName} @${name} ${ariaDescription} ${typeLabel}`}
+                  onMouseEnter={() => onHover(index)}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    onChoose(candidate);
+                  }}
+                  className={cn(
+                    "flex min-h-10 w-full items-center gap-2.5 rounded-[13px] px-2.5 py-1.5 text-left transition-colors",
+                    selected
+                      ? "bg-foreground/[0.055] text-foreground"
+                      : "text-foreground/90 hover:bg-foreground/[0.04]",
+                  )}
+                >
+                  <MentionCandidateLogo candidate={candidate} selected={selected} />
+                  <span className="flex min-w-0 flex-1 items-baseline gap-2">
+                    <span className="min-w-0 truncate text-[15px] font-medium tracking-normal text-foreground">
+                      {displayName}
+                    </span>
+                    <span className="truncate text-[15px] font-normal tracking-normal text-muted-foreground/72">
+                      {candidate.kind === "session" ? typeLabel : `@${name}`}
+                    </span>
+                  </span>
+                  {candidate.kind !== "session" ? (
+                    <span
+                      className={cn(
+                        "ml-2 shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold tracking-normal",
+                        candidate.kind === "cli"
+                          ? "bg-orange-500/10 text-orange-600 dark:text-orange-300"
+                          : "bg-sky-500/10 text-sky-600 dark:text-sky-300",
+                      )}
+                    >
+                      {typeLabel}
+                    </span>
+                  ) : null}
+                </button>
+              );
+            })}
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -2682,8 +2724,8 @@ function MentionCandidateLogo({
 
   if (candidate.kind === "session") {
     return (
-      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-[5px] bg-violet-500/10 text-violet-600 dark:text-violet-300">
-        <History className="h-3.5 w-3.5" aria-hidden />
+      <span className="flex h-5 w-5 shrink-0 items-center justify-center text-muted-foreground">
+        <MessageCircle className="h-4 w-4" aria-hidden />
       </span>
     );
   }

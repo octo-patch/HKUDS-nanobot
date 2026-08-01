@@ -1196,11 +1196,12 @@
         "label": "メンション",
         "cliGroup": "CLI アプリ",
         "mcpGroup": "MCP サービス",
+        "sessionGroup": "Nanobot の会話",
         "cliBadge": "CLI",
         "mcpBadge": "MCP",
         "cliDescription": "@{{name}} をローカル CLI アプリとして使用",
         "mcpDescription": "@{{name}} を MCP サーバーとして使用",
-        "sessionBadge": "チャット",
+        "sessionBadge": "Nanobot の会話",
         "sessionDescription": "@{{name}} を過去のチャットとして参照"
       },
       "workspace": {

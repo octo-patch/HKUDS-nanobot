@@ -1628,9 +1628,9 @@ describe("NanobotClient", () => {
     client.connect();
     lastSocket().fakeOpen();
 
-    client.sendMessage("chat-current", "Use @chat-pricing", undefined, {
+    client.sendMessage("chat-current", "Use @pricing", undefined, {
       sessionMentions: [{
-        name: "chat-pricing",
+        name: "pricing",
         session_key: "websocket:pricing",
         title: "Pricing",
       }],
@@ -1639,9 +1639,9 @@ describe("NanobotClient", () => {
     expect(lastSocket().sent).toContain(JSON.stringify({
       type: "message",
       chat_id: "chat-current",
-      content: "Use @chat-pricing",
+      content: "Use @pricing",
       session_mentions: [{
-        name: "chat-pricing",
+        name: "pricing",
         session_key: "websocket:pricing",
         title: "Pricing",
       }],

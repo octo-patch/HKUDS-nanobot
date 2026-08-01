@@ -205,10 +205,10 @@ async def test_webui_message_forwards_verified_session_mentions(tmp_path) -> Non
     envelope = {
         "type": "message",
         "chat_id": "current",
-        "content": "Use @chat-pricing",
+        "content": "Use @pricing",
         "webui": True,
         "session_mentions": [{
-            "name": "chat-pricing",
+            "name": "pricing",
             "session_key": "websocket:pricing",
             "title": "Untrusted title",
         }],
@@ -219,7 +219,7 @@ async def test_webui_message_forwards_verified_session_mentions(tmp_path) -> Non
     channel._handle_message.assert_awaited_once()
     metadata = channel._handle_message.call_args.kwargs["metadata"]
     assert metadata["session_mentions"] == [{
-        "name": "chat-pricing",
+        "name": "pricing",
         "session_key": "websocket:pricing",
         "title": "Pricing",
     }]

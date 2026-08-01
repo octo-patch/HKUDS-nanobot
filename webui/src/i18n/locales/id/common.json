@@ -1196,11 +1196,12 @@
         "label": "Sebutan",
         "cliGroup": "App CLI",
         "mcpGroup": "Layanan MCP",
+        "sessionGroup": "Percakapan Nanobot",
         "cliBadge": "CLI",
         "mcpBadge": "MCP",
         "cliDescription": "Gunakan @{{name}} sebagai aplikasi CLI lokal",
         "mcpDescription": "Gunakan @{{name}} sebagai server MCP",
-        "sessionBadge": "Chat",
+        "sessionBadge": "Percakapan Nanobot",
         "sessionDescription": "Referensikan @{{name}} sebagai chat sebelumnya"
       },
       "workspace": {

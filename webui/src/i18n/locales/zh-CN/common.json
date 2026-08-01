@@ -1193,11 +1193,12 @@
         "label": "提及",
         "cliGroup": "CLI 应用",
         "mcpGroup": "MCP 服务",
+        "sessionGroup": "Nanobot 对话",
         "cliBadge": "CLI",
         "mcpBadge": "MCP",
         "cliDescription": "使用 @{{name}} 调用本地 CLI",
         "mcpDescription": "使用 @{{name}} 调用 MCP 服务",
-        "sessionBadge": "会话",
+        "sessionBadge": "Nanobot 对话",
         "sessionDescription": "引用历史会话 @{{name}}"
       },
       "encoding": "处理中…",

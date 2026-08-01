@@ -477,10 +477,10 @@ describe("MessageBubble", () => {
     const message: UIMessage = {
       id: "u-session",
       role: "user",
-      content: "Use @chat-收费设计 as context",
+      content: "Use @收费设计 as context",
       createdAt: Date.now(),
       sessionMentions: [{
-        name: "chat-收费设计",
+        name: "收费设计",
         session_key: "websocket:pricing",
         title: "收费设计",
       }],
@@ -488,8 +488,8 @@ describe("MessageBubble", () => {
 
     render(<MessageBubble message={message} />);
 
-    const token = screen.getByTestId("message-session-mention-chat-收费设计");
-    expect(token).toHaveTextContent("@chat-收费设计");
+    const token = screen.getByTestId("message-session-mention-收费设计");
+    expect(token).toHaveTextContent("@收费设计");
     expect(token).toHaveAttribute("title", "Session: 收费设计");
   });
 
