@@ -5,7 +5,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar, Token
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Awaitable, Callable, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
     from nanobot.agent.subagent import SubagentManager
@@ -75,6 +75,9 @@ def current_request_session_key() -> str | None:
     return ctx.session_key if ctx else None
 
 
+SessionPrompt = Callable[[str, str, RequestContext], Awaitable[str]]
+
+
 @dataclass
 class ToolContext:
     config: ToolsConfig
@@ -84,6 +87,7 @@ class ToolContext:
     cron_service: CronService | None = None
     exec_session_manager: ExecSessionManager | None = None
     sessions: SessionManager | None = None
+    session_prompt: SessionPrompt | None = None
     file_state_store: FileStates | None = None
     provider_snapshot_loader: Callable[..., ProviderSnapshot] | None = None
     image_generation_provider_configs: dict[str, ProviderConfig] | None = None

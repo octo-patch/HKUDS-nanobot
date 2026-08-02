@@ -1490,6 +1490,85 @@ async def test_process_direct_rejects_reserved_system_channel(tmp_path: Path) ->
 
 
 @pytest.mark.asyncio
+async def test_prompt_session_runs_and_persists_target_turn(tmp_path: Path) -> None:
+    loop = _make_full_loop(tmp_path)
+    target = loop.sessions.get_or_create("websocket:target")
+    target.add_message("user", "existing question")
+    target.add_message("assistant", "existing answer")
+    loop.sessions.save(target)
+
+    response = await loop._prompt_session(
+        target.key,
+        "delegated question",
+        RequestContext(
+            channel="websocket",
+            chat_id="source",
+            session_key="websocket:source",
+            sender_id="user",
+        ),
+    )
+
+    persisted = loop.sessions.read_session_file(target.key)
+    assert response == "Test title"
+    assert persisted is not None
+    assert [(message["role"], message["content"]) for message in persisted["messages"]] == [
+        ("user", "existing question"),
+        ("assistant", "existing answer"),
+        ("user", "delegated question"),
+        ("assistant", "Test title"),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_prompt_session_rejects_busy_target(tmp_path: Path) -> None:
+    loop = _make_full_loop(tmp_path)
+    lock = loop._get_session_lock("websocket:target")
+    await lock.acquire()
+    try:
+        with pytest.raises(ValueError, match="target session is busy"):
+            await loop._prompt_session(
+                "websocket:target",
+                "delegated question",
+                RequestContext(
+                    channel="websocket",
+                    chat_id="source",
+                    session_key="websocket:source",
+                ),
+            )
+    finally:
+        lock.release()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("target", "attributes", "error"),
+    [
+        ("websocket:source", {}, "current session"),
+        ("websocket:target", {"session_prompt_depth": 1}, "cannot delegate again"),
+    ],
+)
+async def test_prompt_session_rejects_recursive_delegation(
+    tmp_path: Path,
+    target: str,
+    attributes: dict[str, int],
+    error: str,
+) -> None:
+    loop = _make_full_loop(tmp_path)
+
+    with pytest.raises(ValueError, match=error):
+        await loop._prompt_session(
+            target,
+            "delegated question",
+            RequestContext(
+                channel="websocket",
+                chat_id="source",
+                session_key="websocket:source",
+                attributes=attributes,
+            ),
+        )
+
+
+@pytest.mark.asyncio
 async def test_process_direct_skip_user_persist_does_not_save_retry_user(
     tmp_path: Path,
 ) -> None:

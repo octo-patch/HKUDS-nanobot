@@ -612,6 +612,7 @@ class AgentLoop:
             cron_service=self.cron_service,
             exec_session_manager=self._exec_session_manager,
             sessions=self.sessions,
+            session_prompt=self._prompt_session,
             provider_snapshot_loader=provider_snapshot_loader,
             image_generation_provider_configs=self._image_generation_provider_configs,
             timezone=self.context.timezone or "UTC",
@@ -2254,6 +2255,46 @@ class AgentLoop:
         finally:
             await self.runtime_event_publisher.run_status_changed(msg, session_key, "idle")
             self.runtime_event_publisher.clear_turn(session_key)
+
+    async def _prompt_session(
+        self,
+        session_key: str,
+        content: str,
+        source: RequestContext,
+    ) -> str:
+        """Run a bounded cross-session turn without delivering it to a channel."""
+        if source.session_key == session_key:
+            raise ValueError("prompt_session cannot target the current session")
+        depth = source.attributes.get("session_prompt_depth", 0)
+        if depth != 0:
+            raise ValueError("a delegated session turn cannot delegate again")
+
+        lock = self._get_session_lock(session_key)
+        if lock.locked():
+            raise ValueError("target session is busy; try again after its current turn finishes")
+        channel, separator, chat_id = session_key.partition(":")
+        if not separator or not channel or not chat_id:
+            raise ValueError("target session has an invalid session key")
+
+        msg = InboundMessage(
+            channel=channel,
+            sender_id=source.sender_id or "user",
+            chat_id=chat_id,
+            content=content,
+            session_key_override=session_key,
+        )
+        delivery = self.turn_delivery_factory.unrouted(msg, session_key)
+        try:
+            async with lock:
+                response = await self._process_message(
+                    msg,
+                    session_key=session_key,
+                    delivery=delivery,
+                    attributes={"session_prompt_depth": 1},
+                )
+        finally:
+            self.runtime_event_publisher.clear_turn(session_key)
+        return response.content if response is not None else ""
 
     def _get_session_lock(self, session_key: str) -> asyncio.Lock:
         """Return the shared lock while allowing idle session entries to expire."""
