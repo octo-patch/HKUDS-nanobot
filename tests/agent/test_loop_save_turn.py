@@ -20,7 +20,12 @@ from nanobot.bus.outbound_events import (
 )
 from nanobot.bus.queue import MessageBus
 from nanobot.cron.session_turns import CRON_HISTORY_META, CRON_TRIGGER_META
-from nanobot.providers.base import LLMProvider, LLMResponse, ProviderConversationState
+from nanobot.providers.base import (
+    LLMProvider,
+    LLMResponse,
+    ProviderConversationState,
+    ToolCallRequest,
+)
 from nanobot.providers.factory import ProviderSnapshot
 from nanobot.runtime_context import (
     RUNTIME_CONTEXT_HISTORY_META,
@@ -1490,53 +1495,76 @@ async def test_process_direct_rejects_reserved_system_channel(tmp_path: Path) ->
 
 
 @pytest.mark.asyncio
-async def test_prompt_session_runs_and_persists_target_turn(tmp_path: Path) -> None:
+async def test_prompt_session_runs_end_to_end_in_target_conversation(tmp_path: Path) -> None:
     loop = _make_full_loop(tmp_path)
+    loop._connect_mcp = AsyncMock()  # type: ignore[method-assign]
     target = loop.sessions.get_or_create("websocket:target")
     target.add_message("user", "existing question")
     target.add_message("assistant", "existing answer")
     loop.sessions.save(target)
-
-    response = await loop._prompt_session(
-        target.key,
-        "delegated question",
-        RequestContext(
-            channel="websocket",
-            chat_id="source",
-            session_key="websocket:source",
-            sender_id="user",
+    loop.provider.chat_with_retry = AsyncMock(side_effect=[
+        LLMResponse(
+            content="I will ask the selected conversation.",
+            tool_calls=[ToolCallRequest(
+                id="prompt-target",
+                name="prompt_session",
+                arguments={
+                    "session_key": target.key,
+                    "prompt": "delegated question",
+                },
+            )],
         ),
+        LLMResponse(content="target answer"),
+        LLMResponse(content="source answer"),
+    ])
+
+    response = await loop.process_direct(
+        "Ask the selected conversation",
+        session_key="websocket:source",
+        channel="websocket",
+        chat_id="source",
     )
 
     persisted = loop.sessions.read_session_file(target.key)
-    assert response == "Test title"
+    assert loop.tools.has("prompt_session")
+    assert response is not None and response.content == "source answer"
     assert persisted is not None
     assert [(message["role"], message["content"]) for message in persisted["messages"]] == [
         ("user", "existing question"),
         ("assistant", "existing answer"),
         ("user", "delegated question"),
-        ("assistant", "Test title"),
+        ("assistant", "target answer"),
     ]
+    target_request = loop.provider.chat_with_retry.await_args_list[1].kwargs["messages"]
+    resumed_source = loop.provider.chat_with_retry.await_args_list[2].kwargs["messages"]
+    assert "existing answer" in str(target_request)
+    assert "delegated question" in str(target_request)
+    assert "target answer" in str(resumed_source)
 
 
 @pytest.mark.asyncio
 async def test_prompt_session_rejects_busy_target(tmp_path: Path) -> None:
     loop = _make_full_loop(tmp_path)
+    target = loop.sessions.get_or_create("websocket:target")
+    target.add_message("user", "existing question")
+    loop.sessions.save(target)
     lock = loop._get_session_lock("websocket:target")
     await lock.acquire()
     try:
-        with pytest.raises(ValueError, match="target session is busy"):
-            await loop._prompt_session(
-                "websocket:target",
-                "delegated question",
-                RequestContext(
-                    channel="websocket",
-                    chat_id="source",
-                    session_key="websocket:source",
-                ),
+        with request_context(RequestContext(
+            channel="websocket",
+            chat_id="source",
+            session_key="websocket:source",
+        )):
+            result = await loop.tools.execute(
+                "prompt_session",
+                {"session_key": target.key, "prompt": "delegated question"},
             )
     finally:
         lock.release()
+
+    assert result.is_error
+    assert "target session is busy" in str(result)
 
 
 @pytest.mark.asyncio
@@ -1545,9 +1573,11 @@ async def test_prompt_session_rejects_busy_target(tmp_path: Path) -> None:
     [
         ("websocket:source", {}, "current session"),
         ("websocket:target", {"session_prompt_depth": 1}, "cannot delegate again"),
+        ("slack:C123:1700.42", {}, "only supports WebUI conversations"),
+        ("websocket:missing", {}, "session not found"),
     ],
 )
-async def test_prompt_session_rejects_recursive_delegation(
+async def test_prompt_session_rejects_invalid_target(
     tmp_path: Path,
     target: str,
     attributes: dict[str, int],
@@ -1555,17 +1585,19 @@ async def test_prompt_session_rejects_recursive_delegation(
 ) -> None:
     loop = _make_full_loop(tmp_path)
 
-    with pytest.raises(ValueError, match=error):
-        await loop._prompt_session(
-            target,
-            "delegated question",
-            RequestContext(
-                channel="websocket",
-                chat_id="source",
-                session_key="websocket:source",
-                attributes=attributes,
-            ),
+    with request_context(RequestContext(
+        channel="websocket",
+        chat_id="source",
+        session_key="websocket:source",
+        attributes=attributes,
+    )):
+        result = await loop.tools.execute(
+            "prompt_session",
+            {"session_key": target, "prompt": "delegated question"},
         )
+
+    assert result.is_error
+    assert error in str(result)
 
 
 @pytest.mark.asyncio

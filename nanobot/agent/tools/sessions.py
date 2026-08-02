@@ -316,21 +316,20 @@ class ReadSessionTool(_SessionTool):
     )
 )
 class PromptSessionTool(Tool):
-    """Run one explicit user-authorized turn in another persisted session."""
+    """Run one explicit user-authorized turn in another WebUI conversation."""
 
-    def __init__(self, sessions: SessionManager, prompt_session: SessionPrompt) -> None:
-        self._sessions = sessions
+    def __init__(self, prompt_session: SessionPrompt) -> None:
         self._prompt_session = prompt_session
 
     @classmethod
     def create(cls, ctx: ToolContext) -> Tool:
-        if ctx.sessions is None or ctx.session_prompt is None:
+        if ctx.session_prompt is None:
             raise RuntimeError("PromptSessionTool requires session execution support")
-        return cls(ctx.sessions, ctx.session_prompt)
+        return cls(ctx.session_prompt)
 
     @classmethod
     def enabled(cls, ctx: ToolContext) -> bool:
-        return ctx.sessions is not None and ctx.session_prompt is not None
+        return ctx.session_prompt is not None
 
     @property
     def name(self) -> str:
@@ -339,11 +338,11 @@ class PromptSessionTool(Tool):
     @property
     def description(self) -> str:
         return (
-            "Run a prompt as the next real turn in another existing conversation session and "
-            "return its assistant response. This changes the target session. Use only when the "
-            "user explicitly asks to ask, continue, or act through that conversation; use "
-            "read_session when context is all you need. The current or busy session cannot be "
-            "targeted, and delegated turns cannot delegate again."
+            "Run a prompt as the next real turn in another existing WebUI conversation and return "
+            "its assistant response. This changes the target conversation. Use only when the user "
+            "explicitly asks to ask, continue, or act through that conversation; use read_session "
+            "when context is all you need. The current or busy conversation cannot be targeted, "
+            "and delegated turns cannot delegate again."
         )
 
     async def execute(self, session_key: str, prompt: str, **kwargs: Any) -> str:
@@ -356,21 +355,13 @@ class PromptSessionTool(Tool):
         request = current_request_context()
         if request is None or not request.session_key:
             return ToolResult.error("Error: prompt_session requires an active source session")
-        if self._sessions.read_session_file(session_key) is None:
-            return ToolResult.error(f"Error: session not found: {session_key}")
 
         try:
             response = await self._prompt_session(session_key, prompt, request)
         except ValueError as exc:
             return ToolResult.error(f"Error: {exc}")
 
-        title = ""
-        for row in self._sessions.list_sessions():
-            if row.get("key") == session_key:
-                title = _session_title(row)
-                break
         return json.dumps({
             "session_key": session_key,
-            "title": title,
             "response": response,
         }, ensure_ascii=False)

@@ -9,7 +9,7 @@ import pytest
 
 from nanobot.agent.tools.context import RequestContext, request_context
 from nanobot.agent.tools.loader import ToolLoader
-from nanobot.agent.tools.sessions import PromptSessionTool, ReadSessionTool, SearchSessionsTool
+from nanobot.agent.tools.sessions import ReadSessionTool, SearchSessionsTool
 from nanobot.runtime_context import RuntimeContextBlock, append_runtime_context
 from nanobot.session.manager import SessionManager
 
@@ -154,62 +154,6 @@ async def test_read_session_filters_by_query_and_returns_recent_matches(tmp_path
 @pytest.mark.asyncio
 async def test_read_session_reports_missing_session(tmp_path):
     result = await ReadSessionTool(SessionManager(tmp_path)).execute(session_key="missing")
-
-    assert result.is_error
-    assert "session not found" in str(result)
-
-
-@pytest.mark.asyncio
-async def test_prompt_session_runs_one_turn_and_returns_response(tmp_path):
-    manager = SessionManager(tmp_path)
-    _save_session(
-        manager,
-        "websocket:target",
-        title="Target",
-        messages=[{"role": "user", "content": "existing context"}],
-    )
-    calls: list[tuple[str, str, str | None]] = []
-
-    async def prompt_session(session_key: str, prompt: str, context: RequestContext) -> str:
-        calls.append((session_key, prompt, context.session_key))
-        return "target answer"
-
-    context = RequestContext(
-        channel="websocket",
-        chat_id="source",
-        session_key="websocket:source",
-    )
-    with request_context(context):
-        result = _decode(await PromptSessionTool(manager, prompt_session).execute(
-            session_key="websocket:target",
-            prompt="ask from source",
-        ))
-
-    assert calls == [("websocket:target", "ask from source", "websocket:source")]
-    assert result == {
-        "session_key": "websocket:target",
-        "title": "Target",
-        "response": "target answer",
-    }
-
-
-@pytest.mark.asyncio
-async def test_prompt_session_rejects_missing_target(tmp_path):
-    manager = SessionManager(tmp_path)
-
-    async def prompt_session(*args):
-        raise AssertionError("missing target must not execute")
-
-    context = RequestContext(
-        channel="websocket",
-        chat_id="source",
-        session_key="websocket:source",
-    )
-    with request_context(context):
-        result = await PromptSessionTool(manager, prompt_session).execute(
-            session_key="websocket:missing",
-            prompt="ask",
-        )
 
     assert result.is_error
     assert "session not found" in str(result)

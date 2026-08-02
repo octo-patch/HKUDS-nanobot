@@ -2262,22 +2262,25 @@ class AgentLoop:
         content: str,
         source: RequestContext,
     ) -> str:
-        """Run a bounded cross-session turn without delivering it to a channel."""
+        """Run one WebUI session turn without delivering it to a channel."""
         if source.session_key == session_key:
             raise ValueError("prompt_session cannot target the current session")
         depth = source.attributes.get("session_prompt_depth", 0)
         if depth != 0:
             raise ValueError("a delegated session turn cannot delegate again")
+        prefix = "websocket:"
+        chat_id = session_key.removeprefix(prefix) if session_key.startswith(prefix) else ""
+        if not chat_id:
+            raise ValueError("prompt_session only supports WebUI conversations")
+        if self.sessions.read_session_file(session_key) is None:
+            raise ValueError(f"session not found: {session_key}")
 
         lock = self._get_session_lock(session_key)
         if lock.locked():
             raise ValueError("target session is busy; try again after its current turn finishes")
-        channel, separator, chat_id = session_key.partition(":")
-        if not separator or not channel or not chat_id:
-            raise ValueError("target session has an invalid session key")
 
         msg = InboundMessage(
-            channel=channel,
+            channel="websocket",
             sender_id=source.sender_id or "user",
             chat_id=chat_id,
             content=content,
